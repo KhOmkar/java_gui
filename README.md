@@ -3,6 +3,7 @@ Railway Management website with historical information
 
 ## Database contruction 
 ```
+create database mini_dbms;
 use mini_dbms;
 show tables;
 
