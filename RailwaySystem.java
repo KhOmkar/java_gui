@@ -1,5 +1,6 @@
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.sql.*;
 import java.text.SimpleDateFormat;
@@ -11,10 +12,16 @@ public class RailwaySystem {
     JFrame frame = new JFrame();
     JPanel loginPanel = new JPanel();
     
+    // Custom colors
+    private static final Color PRIMARY_COLOR = new Color(41, 128, 185);
+    private static final Color SECONDARY_COLOR = new Color(52, 152, 219);
+    private static final Color BACKGROUND_COLOR = new Color(236, 240, 241);
+    private static final Color TEXT_COLOR = new Color(44, 62, 80);
+    
     // Database connection information
     private static final String DB_URL = "jdbc:mysql://localhost:3306/mini_dbms";
-    private static final String DB_USER = "root"; // Change as per your MySQL setup
-    private static final String DB_PASSWORD = "Omkar@23-24"; // Change as per your MySQL setup
+    private static final String DB_USER = "root";
+    private static final String DB_PASSWORD = "Omkar@23-24";
 
     // Get database connection
     public static Connection getConnection() throws SQLException {
@@ -22,15 +29,180 @@ public class RailwaySystem {
     }
 
     public RailwaySystem() {
-        frame.setTitle("Login Page");
+        // Set modern look and feel
+        try {
+            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    UIManager.setLookAndFeel(info.getClassName());
+                    break;
+                }
+            }
+            
+            // Customize Nimbus colors
+            UIManager.put("nimbusBase", PRIMARY_COLOR);
+            UIManager.put("nimbusBlueGrey", SECONDARY_COLOR);
+            UIManager.put("control", BACKGROUND_COLOR);
+            
+            // Customize component colors
+            UIManager.put("TextField.background", Color.WHITE);
+            UIManager.put("TextField.foreground", TEXT_COLOR);
+            UIManager.put("Button.background", PRIMARY_COLOR);
+            UIManager.put("Button.foreground", Color.WHITE);
+            UIManager.put("ComboBox.background", Color.WHITE);
+            UIManager.put("ComboBox.foreground", TEXT_COLOR);
+            UIManager.put("Label.foreground", TEXT_COLOR);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        frame.setTitle("Railway Management System - Login");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(400, 400);
+        frame.setSize(500, 600);
         frame.setLocationRelativeTo(null);
 
-        loginPanel.setLayout(null);
-        loginPanel.setBackground(Color.LIGHT_GRAY);
+        loginPanel.setLayout(new GridBagLayout());
+        loginPanel.setBackground(BACKGROUND_COLOR);
+        loginPanel.setBorder(new EmptyBorder(40, 60, 40, 60));
 
         frame.add(loginPanel);
+        setupLoginPanel();
+    }
+
+    private void setupLoginPanel() {
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(10, 10, 10, 10);
+
+        // Title
+        JLabel titleLabel = new JLabel("Railway Management System", SwingConstants.CENTER);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        titleLabel.setForeground(PRIMARY_COLOR);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        gbc.insets = new Insets(10, 10, 30, 10);
+        loginPanel.add(titleLabel, gbc);
+
+        // Reset insets for other components
+        gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.gridwidth = 1;
+
+        // Email field
+        JLabel emailLabel = new JLabel("Email Address:");
+        emailLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        loginPanel.add(emailLabel, gbc);
+
+        JTextField emailField = new JTextField(20);
+        styleTextField(emailField);
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        loginPanel.add(emailField, gbc);
+
+        // Password field
+        JLabel passLabel = new JLabel("Password:");
+        passLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        loginPanel.add(passLabel, gbc);
+
+        JPasswordField passField = new JPasswordField(20);
+        styleTextField(passField);
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        loginPanel.add(passField, gbc);
+
+        // Buttons panel
+        JPanel buttonPanel = new JPanel(new GridLayout(1, 2, 15, 0));
+        buttonPanel.setOpaque(false);
+
+        JButton loginButton = new JButton("Login");
+        JButton signUpButton = new JButton("Sign Up");
+        
+        styleButton(loginButton);
+        styleButton(signUpButton);
+
+        buttonPanel.add(loginButton);
+        buttonPanel.add(signUpButton);
+
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.insets = new Insets(30, 10, 10, 10);
+        loginPanel.add(buttonPanel, gbc);
+
+        // Add action listeners
+        loginButton.addActionListener(e -> handleLogin(emailField.getText(), new String(passField.getPassword())));
+        signUpButton.addActionListener(e -> new SignUpFrame().setVisible(true));
+    }
+
+    private void handleLogin(String email, String password) {
+        if (email.isEmpty() || password.isEmpty()) {
+            showError("Please enter email and password.");
+            return;
+        }
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT * FROM User WHERE email = ? AND password_hash = ?")) {
+
+            stmt.setString(1, email);
+            stmt.setString(2, password);
+
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                // Update last login time
+                try (PreparedStatement updateStmt = conn.prepareStatement(
+                        "UPDATE User SET last_login = CURRENT_TIMESTAMP WHERE email = ?")) {
+                    updateStmt.setString(1, email);
+                    updateStmt.executeUpdate();
+                }
+
+                int userId = rs.getInt("user_id");
+                String role = rs.getString("user_role");
+                frame.dispose();
+                new DashboardFrame(email, userId, role).setVisible(true);
+            } else {
+                showError("Invalid email or password.");
+            }
+        } catch (SQLException ex) {
+            showError("Database error: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+    }
+
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(frame, message, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    // Utility methods for styling components
+    private static void styleTextField(JTextField textField) {
+        textField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        textField.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(SECONDARY_COLOR),
+            BorderFactory.createEmptyBorder(5, 10, 5, 10)
+        ));
+    }
+
+    private static void styleButton(JButton button) {
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setForeground(Color.WHITE);
+        button.setBackground(PRIMARY_COLOR);
+        button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        // Add hover effect
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(SECONDARY_COLOR);
+            }
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(PRIMARY_COLOR);
+            }
+        });
     }
 
     void show() {
@@ -49,78 +221,6 @@ public class RailwaySystem {
         }
         
         RailwaySystem system = new RailwaySystem();
-
-        JLabel emailLabel = new JLabel("User Email:");
-        emailLabel.setBounds(20, 70, 120, 25);
-        emailLabel.setFont(new Font("Serif", Font.ITALIC, 16));
-
-        JTextField emailField = new JTextField();
-        emailField.setBounds(140, 70, 200, 25);
-
-        JLabel passLabel = new JLabel("Password:");
-        passLabel.setBounds(20, 110, 100, 25);
-        passLabel.setFont(new Font("Serif", Font.ITALIC, 16));
-
-        JPasswordField passField = new JPasswordField(); // Changed to password field for security
-        passField.setBounds(140, 110, 200, 25);
-
-        JButton loginButton = new JButton("Login");
-        loginButton.setBounds(150, 200, 80, 25);
-
-        JButton signUpButton = new JButton("SignUp");
-        signUpButton.setBounds(250, 200, 80, 25);
-
-        loginButton.addActionListener(e -> {
-            String email = emailField.getText();
-            String password = new String(passField.getPassword());
-            
-            if (email.isEmpty() || password.isEmpty()) {
-                JOptionPane.showMessageDialog(system.frame, "Please enter email and password.");
-                return;
-            }
-            
-            // Authenticate user from database
-            try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT * FROM User WHERE email = ? AND password_hash = ?")) {
-                
-                stmt.setString(1, email);
-                stmt.setString(2, password); // In real app, you should hash the password
-                
-                ResultSet rs = stmt.executeQuery();
-                if (rs.next()) {
-                    // Update last login time
-                    try (PreparedStatement updateStmt = conn.prepareStatement(
-                            "UPDATE User SET last_login = CURRENT_TIMESTAMP WHERE email = ?")) {
-                        updateStmt.setString(1, email);
-                        updateStmt.executeUpdate();
-                    }
-                    
-                    int userId = rs.getInt("user_id");
-                    String role = rs.getString("user_role");
-                    system.frame.dispose();
-                    new DashboardFrame(email, userId, role).setVisible(true);
-                } else {
-                    JOptionPane.showMessageDialog(system.frame, "Invalid email or password.");
-                }
-            } catch (SQLException ex) {
-                JOptionPane.showMessageDialog(system.frame, "Database error: " + ex.getMessage());
-                ex.printStackTrace();
-            }
-        });
-        
-        signUpButton.addActionListener(e -> {
-            new SignUpFrame().setVisible(true);
-        });
-
-        system.loginPanel.add(emailLabel);
-        system.loginPanel.add(emailField);
-        system.loginPanel.add(passLabel);
-        system.loginPanel.add(passField);
-        system.loginPanel.add(loginButton);
-        system.loginPanel.add(signUpButton);
-
-        system.frame.add(system.loginPanel);
         system.show();
     }
     
@@ -131,65 +231,101 @@ public class RailwaySystem {
         private JTextField dobField;
         
         public SignUpFrame() {
-            setTitle("Create Account");
-            setSize(400, 400);
+            setTitle("Create New Account");
+            setSize(500, 700);
             setLocationRelativeTo(null);
-            setLayout(null);
             
-            JLabel nameLabel = new JLabel("Full Name:");
-            nameLabel.setBounds(20, 30, 100, 25);
-            nameField = new JTextField();
-            nameField.setBounds(140, 30, 200, 25);
+            // Set background color
+            JPanel mainPanel = new JPanel();
+            mainPanel.setBackground(BACKGROUND_COLOR);
+            mainPanel.setLayout(new GridBagLayout());
+            mainPanel.setBorder(new EmptyBorder(40, 60, 40, 60));
             
-            JLabel emailLabel = new JLabel("Email:");
-            emailLabel.setBounds(20, 70, 100, 25);
-            emailField = new JTextField();
-            emailField.setBounds(140, 70, 200, 25);
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            gbc.insets = new Insets(10, 10, 10, 10);
             
-            JLabel phoneLabel = new JLabel("Phone:");
-            phoneLabel.setBounds(20, 110, 100, 25);
-            phoneField = new JTextField();
-            phoneField.setBounds(140, 110, 200, 25);
+            // Title
+            JLabel titleLabel = new JLabel("Create New Account", SwingConstants.CENTER);
+            titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+            titleLabel.setForeground(PRIMARY_COLOR);
+            gbc.gridx = 0;
+            gbc.gridy = 0;
+            gbc.gridwidth = 2;
+            gbc.insets = new Insets(10, 10, 30, 10);
+            mainPanel.add(titleLabel, gbc);
             
-            JLabel dobLabel = new JLabel("Date of Birth:");
-            dobLabel.setBounds(20, 150, 100, 25);
-            dobField = new JTextField("YYYY-MM-DD");
-            dobField.setBounds(140, 150, 200, 25);
+            // Reset insets and gridwidth
+            gbc.insets = new Insets(10, 10, 10, 10);
+            gbc.gridwidth = 1;
             
-            JLabel genderLabel = new JLabel("Gender:");
-            genderLabel.setBounds(20, 190, 100, 25);
+            // Name field
+            addFormField(mainPanel, "Full Name:", nameField = new JTextField(20), gbc, 1);
+            
+            // Email field
+            addFormField(mainPanel, "Email Address:", emailField = new JTextField(20), gbc, 3);
+            
+            // Phone field
+            addFormField(mainPanel, "Phone Number:", phoneField = new JTextField(20), gbc, 5);
+            
+            // DOB field
+            dobField = new JTextField(20);
+            dobField.setText("YYYY-MM-DD");
+            addFormField(mainPanel, "Date of Birth:", dobField, gbc, 7);
+            
+            // Gender combo
             genderCombo = new JComboBox<>(new String[]{"Male", "Female", "Other"});
-            genderCombo.setBounds(140, 190, 200, 25);
+            styleComboBox(genderCombo);
+            addFormField(mainPanel, "Gender:", genderCombo, gbc, 9);
             
-            JLabel passwordLabel = new JLabel("Password:");
-            passwordLabel.setBounds(20, 230, 100, 25);
-            passwordField = new JPasswordField();
-            passwordField.setBounds(140, 230, 200, 25);
+            // Password fields
+            addFormField(mainPanel, "Password:", passwordField = new JPasswordField(20), gbc, 11);
+            addFormField(mainPanel, "Confirm Password:", confirmPasswordField = new JPasswordField(20), gbc, 13);
             
-            JLabel confirmLabel = new JLabel("Confirm:");
-            confirmLabel.setBounds(20, 270, 100, 25);
-            confirmPasswordField = new JPasswordField();
-            confirmPasswordField.setBounds(140, 270, 200, 25);
+            // Register button
+            JButton registerButton = new JButton("Create Account");
+            styleButton(registerButton);
+            gbc.gridx = 0;
+            gbc.gridy = 15;
+            gbc.gridwidth = 2;
+            gbc.insets = new Insets(30, 10, 10, 10);
+            mainPanel.add(registerButton, gbc);
             
-            JButton registerButton = new JButton("Register");
-            registerButton.setBounds(150, 320, 100, 25);
+            // Style text fields
+            styleTextField(nameField);
+            styleTextField(emailField);
+            styleTextField(phoneField);
+            styleTextField(dobField);
+            styleTextField(passwordField);
+            styleTextField(confirmPasswordField);
+            
             registerButton.addActionListener(e -> registerUser());
             
-            add(nameLabel);
-            add(nameField);
-            add(emailLabel);
-            add(emailField);
-            add(phoneLabel);
-            add(phoneField);
-            add(dobLabel);
-            add(dobField);
-            add(genderLabel);
-            add(genderCombo);
-            add(passwordLabel);
-            add(passwordField);
-            add(confirmLabel);
-            add(confirmPasswordField);
-            add(registerButton);
+            // Add main panel to frame
+            add(mainPanel);
+        }
+        
+        private void addFormField(JPanel panel, String labelText, JComponent field, GridBagConstraints gbc, int gridy) {
+            JLabel label = new JLabel(labelText);
+            label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            label.setForeground(TEXT_COLOR);
+            
+            gbc.gridx = 0;
+            gbc.gridy = gridy;
+            panel.add(label, gbc);
+            
+            gbc.gridy = gridy + 1;
+            panel.add(field, gbc);
+        }
+        
+        private static void styleComboBox(JComboBox<?> comboBox) {
+            comboBox.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            comboBox.setBackground(Color.WHITE);
+            comboBox.setForeground(TEXT_COLOR);
+            comboBox.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(SECONDARY_COLOR),
+                BorderFactory.createEmptyBorder(5, 10, 5, 10)
+            ));
         }
         
         private void registerUser() {
@@ -202,12 +338,12 @@ public class RailwaySystem {
             String confirmPassword = new String(confirmPasswordField.getPassword());
             
             if (name.isEmpty() || email.isEmpty() || phone.isEmpty() || password.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Please fill all required fields.");
+                showError("Please fill all required fields.");
                 return;
             }
             
             if (!password.equals(confirmPassword)) {
-                JOptionPane.showMessageDialog(this, "Passwords do not match.");
+                showError("Passwords do not match.");
                 return;
             }
             
@@ -234,22 +370,28 @@ public class RailwaySystem {
                         try (PreparedStatement ustmt = conn.prepareStatement(
                                 "INSERT INTO User (user_id, email, password_hash, user_role) VALUES (?, ?, ?, ?)")) {
                             
-                            // In a real app, you would hash the password
-                            ustmt.setInt(1, passengerId); // Use passenger_id as user_id
+                            ustmt.setInt(1, passengerId);
                             ustmt.setString(2, email);
-                            ustmt.setString(3, password); // Should be hashed in production
+                            ustmt.setString(3, password);
                             ustmt.setString(4, "passenger");
                             
                             ustmt.executeUpdate();
-                            JOptionPane.showMessageDialog(this, "Registration successful! You can now login.");
+                            JOptionPane.showMessageDialog(this, 
+                                "Registration successful! You can now login.", 
+                                "Success", 
+                                JOptionPane.INFORMATION_MESSAGE);
                             dispose();
                         }
                     }
                 }
             } catch (SQLException ex) {
-                JOptionPane.showMessageDialog(this, "Error registering user: " + ex.getMessage());
+                showError("Error registering user: " + ex.getMessage());
                 ex.printStackTrace();
             }
+        }
+        
+        private void showError(String message) {
+            JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -262,35 +404,57 @@ public class RailwaySystem {
             this.userRole = userRole;
             
             setTitle("Dashboard - Railway Management System");
-            setSize(500, 400);
+            setSize(900, 600);
             setLocationRelativeTo(null);
             setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            setLayout(new BorderLayout());
-
+            
+            // Create main panel with background color
+            JPanel mainPanel = new JPanel(new BorderLayout(20, 20));
+            mainPanel.setBackground(BACKGROUND_COLOR);
+            mainPanel.setBorder(new EmptyBorder(30, 40, 30, 40));
+            
+            // Welcome panel
+            JPanel welcomePanel = new JPanel(new BorderLayout());
+            welcomePanel.setBackground(BACKGROUND_COLOR);
+            
             JLabel welcomeLabel = new JLabel("Welcome, " + username + "!", SwingConstants.CENTER);
-            welcomeLabel.setFont(new Font("Arial", Font.BOLD, 20));
-            welcomeLabel.setBorder(BorderFactory.createEmptyBorder(20, 10, 20, 10));
-            add(welcomeLabel, BorderLayout.NORTH);
-
-            JPanel buttonPanel = new JPanel(new GridLayout(3, 2, 15, 15));
-            buttonPanel.setBorder(BorderFactory.createEmptyBorder(20, 40, 20, 40));
-
-            JButton viewTrainsButton = new JButton("View Train Schedule");
-            JButton bookTicketButton = new JButton("Book Ticket");
-            JButton cancelTicketButton = new JButton("Cancel Ticket");
-            JButton searchTrainButton = new JButton("Search Train");
-            JButton myTicketsButton = new JButton("My Tickets");
-            JButton logoutButton = new JButton("Logout");
-
+            welcomeLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
+            welcomeLabel.setForeground(PRIMARY_COLOR);
+            welcomeLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
+            
+            JLabel roleLabel = new JLabel("Role: " + userRole, SwingConstants.CENTER);
+            roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+            roleLabel.setForeground(SECONDARY_COLOR);
+            
+            welcomePanel.add(welcomeLabel, BorderLayout.CENTER);
+            welcomePanel.add(roleLabel, BorderLayout.SOUTH);
+            
+            // Button panel with grid layout
+            JPanel buttonPanel = new JPanel(new GridLayout(3, 2, 20, 20));
+            buttonPanel.setBackground(BACKGROUND_COLOR);
+            buttonPanel.setBorder(BorderFactory.createEmptyBorder(20, 0, 20, 0));
+            
+            // Create and style buttons
+            JButton viewTrainsButton = createDashboardButton("View Train Schedule", "📅");
+            JButton bookTicketButton = createDashboardButton("Book Ticket", "🎫");
+            JButton cancelTicketButton = createDashboardButton("Cancel Ticket", "❌");
+            JButton searchTrainButton = createDashboardButton("Search Train", "🔍");
+            JButton myTicketsButton = createDashboardButton("My Tickets", "📋");
+            JButton logoutButton = createDashboardButton("Logout", "🚪");
+            
+            // Add buttons to panel
             buttonPanel.add(viewTrainsButton);
             buttonPanel.add(bookTicketButton);
             buttonPanel.add(cancelTicketButton);
             buttonPanel.add(searchTrainButton);
             buttonPanel.add(myTicketsButton);
             buttonPanel.add(logoutButton);
-
-            add(buttonPanel, BorderLayout.CENTER);
-
+            
+            // Add components to main panel
+            mainPanel.add(welcomePanel, BorderLayout.NORTH);
+            mainPanel.add(buttonPanel, BorderLayout.CENTER);
+            
+            // Add action listeners
             viewTrainsButton.addActionListener(e -> new TrainScheduleFrame().setVisible(true));
             bookTicketButton.addActionListener(e -> new BookTicketFrame(userId).setVisible(true));
             cancelTicketButton.addActionListener(e -> new CancelTicketFrame(userId).setVisible(true));
@@ -300,6 +464,35 @@ public class RailwaySystem {
                 dispose();
                 new RailwaySystem().show();
             });
+            
+            // Add main panel to frame
+            add(mainPanel);
+        }
+        
+        private JButton createDashboardButton(String text, String emoji) {
+            JButton button = new JButton("<html><center>" + emoji + "<br>" + text + "</center></html>");
+            button.setFont(new Font("Segoe UI", Font.BOLD, 16));
+            button.setForeground(Color.WHITE);
+            button.setBackground(PRIMARY_COLOR);
+            button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(SECONDARY_COLOR, 2),
+                BorderFactory.createEmptyBorder(15, 25, 15, 25)
+            ));
+            button.setFocusPainted(false);
+            button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            
+            // Add hover effect
+            button.addMouseListener(new java.awt.event.MouseAdapter() {
+                public void mouseEntered(java.awt.event.MouseEvent evt) {
+                    button.setBackground(SECONDARY_COLOR);
+                }
+                
+                public void mouseExited(java.awt.event.MouseEvent evt) {
+                    button.setBackground(PRIMARY_COLOR);
+                }
+            });
+            
+            return button;
         }
     }
     
@@ -361,16 +554,90 @@ public class RailwaySystem {
     static class TrainScheduleFrame extends JFrame {
         public TrainScheduleFrame() {
             setTitle("Train Schedule");
-            setSize(800, 400);
+            setSize(1000, 600);
             setLocationRelativeTo(null);
-
-            String[] columns = {"Schedule ID", "Train Name", "Train ID", "From", "To", "Departure", "Arrival", "Platform"};
-            DefaultTableModel model = new DefaultTableModel(columns, 0);
-            JTable table = new JTable(model);
-            JScrollPane scrollPane = new JScrollPane(table);
-            add(scrollPane, BorderLayout.CENTER);
             
+            // Create main panel
+            JPanel mainPanel = new JPanel(new BorderLayout(20, 20));
+            mainPanel.setBackground(BACKGROUND_COLOR);
+            mainPanel.setBorder(new EmptyBorder(30, 40, 30, 40));
+            
+            // Title panel
+            JPanel titlePanel = new JPanel(new BorderLayout());
+            titlePanel.setBackground(BACKGROUND_COLOR);
+            
+            JLabel titleLabel = new JLabel("Train Schedule", SwingConstants.CENTER);
+            titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+            titleLabel.setForeground(PRIMARY_COLOR);
+            titlePanel.add(titleLabel, BorderLayout.CENTER);
+            
+            // Table panel
+            JPanel tablePanel = new JPanel(new BorderLayout());
+            tablePanel.setBackground(BACKGROUND_COLOR);
+            
+            String[] columns = {"Schedule ID", "Train Name", "Train ID", "From", "To", "Departure", "Arrival", "Platform"};
+            DefaultTableModel model = new DefaultTableModel(columns, 0) {
+                @Override
+                public boolean isCellEditable(int row, int column) {
+                    return false;
+                }
+            };
+            
+            JTable table = new JTable(model);
+            styleTable(table);
+            
+            // Scroll pane for table
+            JScrollPane scrollPane = new JScrollPane(table);
+            scrollPane.setBorder(BorderFactory.createLineBorder(SECONDARY_COLOR));
+            scrollPane.getViewport().setBackground(Color.WHITE);
+            
+            tablePanel.add(scrollPane, BorderLayout.CENTER);
+            
+            // Add panels to main panel
+            mainPanel.add(titlePanel, BorderLayout.NORTH);
+            mainPanel.add(tablePanel, BorderLayout.CENTER);
+            
+            // Add main panel to frame
+            add(mainPanel);
+            
+            // Load data
             loadSchedules(model);
+        }
+        
+        private void styleTable(JTable table) {
+            // Header styling
+            table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
+            table.getTableHeader().setBackground(PRIMARY_COLOR);
+            table.getTableHeader().setForeground(Color.WHITE);
+            table.getTableHeader().setPreferredSize(new Dimension(0, 40));
+            
+            // Row styling
+            table.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            table.setRowHeight(35);
+            table.setGridColor(new Color(230, 230, 230));
+            table.setShowVerticalLines(true);
+            table.setShowHorizontalLines(true);
+            
+            // Selection styling
+            table.setSelectionBackground(new Color(232, 241, 249));
+            table.setSelectionForeground(TEXT_COLOR);
+            
+            // Alternating row colors
+            table.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value,
+                        boolean isSelected, boolean hasFocus, int row, int column) {
+                    Component c = super.getTableCellRendererComponent(table, value,
+                            isSelected, hasFocus, row, column);
+                    
+                    if (!isSelected) {
+                        c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(245, 245, 245));
+                    }
+                    
+                    ((JLabel) c).setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
+                    return c;
+                }
+            });
         }
         
         private void loadSchedules(DefaultTableModel model) {
@@ -383,7 +650,8 @@ public class RailwaySystem {
                     "FROM Schedule s " +
                     "JOIN Train t ON s.train_id = t.train_id " +
                     "JOIN Station st1 ON s.origin_station_id = st1.station_id " +
-                    "JOIN Station st2 ON s.dest_station_id = st2.station_id")) {
+                    "JOIN Station st2 ON s.dest_station_id = st2.station_id " +
+                    "ORDER BY s.departure_time")) {
                 
                 while (rs.next()) {
                     model.addRow(new Object[]{
@@ -398,15 +666,19 @@ public class RailwaySystem {
                     });
                 }
             } catch (SQLException ex) {
-                JOptionPane.showMessageDialog(this, "Error loading schedules: " + ex.getMessage());
+                showError("Error loading schedules: " + ex.getMessage());
                 ex.printStackTrace();
             }
+        }
+        
+        private void showError(String message) {
+            JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     static class BookTicketFrame extends JFrame {
         private int passengerId;
-        private JComboBox<String> sourceCombo, destCombo, trainCombo;
+        private JComboBox<String> sourceCombo, destCombo;
         private JTextField dateField;
         private JComboBox<String> classComboBox;
         private int selectedScheduleId = -1;
@@ -416,7 +688,7 @@ public class RailwaySystem {
         public BookTicketFrame(int passengerId) {
             this.passengerId = passengerId;
             setTitle("Book Ticket");
-            setSize(700, 500);
+            setSize(900, 500);
             setLocationRelativeTo(null);
             setLayout(new BorderLayout());
 
@@ -450,8 +722,8 @@ public class RailwaySystem {
             northPanel.add(searchPanel, BorderLayout.SOUTH);
             add(northPanel, BorderLayout.NORTH);
             
-            // Table for available trains
-            String[] columns = {"Schedule ID", "Train Name", "From", "To", "Departure", "Arrival", "Platform"};
+            // Table for available trains with updated columns
+            String[] columns = {"Schedule ID", "Train Name", "From", "To", "Departure", "Arrival", "Platform", "Train Type", "Available Seats"};
             tableModel = new DefaultTableModel(columns, 0) {
                 @Override
                 public boolean isCellEditable(int row, int column) {
@@ -523,15 +795,21 @@ public class RailwaySystem {
             
             try (Connection conn = getConnection();
                 PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT s.schedule_id, t.train_name, " +
+                    "SELECT DISTINCT s.schedule_id, t.train_name, " +
                     "st1.station_name as origin, st2.station_name as destination, " +
-                    "s.departure_time, s.arrival_time, s.platform_number " +
+                    "s.departure_time, s.arrival_time, s.platform_number, " +
+                    "t.train_type, " +
+                    "(SELECT COUNT(*) FROM SeatAvailability sa " +
+                    "WHERE sa.schedule_id = s.schedule_id AND sa.is_available = true) as available_seats " +
                     "FROM Schedule s " +
                     "JOIN Train t ON s.train_id = t.train_id " +
                     "JOIN Station st1 ON s.origin_station_id = st1.station_id " +
                     "JOIN Station st2 ON s.dest_station_id = st2.station_id " +
+                    "LEFT JOIN SeatAvailability sa ON s.schedule_id = sa.schedule_id " +
                     "WHERE s.origin_station_id = ? AND s.dest_station_id = ? " +
-                    "AND DATE(s.departure_time) = ?")) {
+                    "AND DATE(s.departure_time) = ? " +
+                    "GROUP BY s.schedule_id " +
+                    "HAVING available_seats > 0")) {
                 
                 stmt.setInt(1, sourceStation.getId());
                 stmt.setInt(2, destStation.getId());
@@ -548,13 +826,15 @@ public class RailwaySystem {
                         rs.getString("destination"),
                         rs.getTimestamp("departure_time"),
                         rs.getTimestamp("arrival_time"),
-                        rs.getInt("platform_number")
+                        rs.getInt("platform_number"),
+                        rs.getString("train_type"),
+                        rs.getInt("available_seats")
                     });
                     found = true;
                 }
                 
                 if (!found) {
-                    JOptionPane.showMessageDialog(this, "No trains found for the selected route and date.");
+                    JOptionPane.showMessageDialog(this, "No trains found with available seats for the selected route and date.");
                 }
                 
             } catch (SQLException ex) {
